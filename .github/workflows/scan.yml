@@ -1,1 +1,62 @@
+name: Scansione Common Crawl
 
+on:
+  schedule:
+    - cron: '0 2 * * *'   # ogni giorno alle 02:00 UTC — modifica pure l'orario
+  workflow_dispatch: {}    # permette anche l'avvio manuale dalla tab "Actions"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # buffer di sicurezza sotto il limite hard di 360 (6 ore)
+    permissions:
+      contents: write   # necessario per il commit di last_run.log nel repo pubblico
+
+    steps:
+      - name: Checkout codice pubblico (questo repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout dati privati
+        uses: actions/checkout@v4
+        with:
+          repository: TUO-USERNAME/cc-scan-data   # <-- cambia con il tuo repo privato
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: data
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installa dipendenze
+        run: pip install -r requirements.txt
+
+      - name: Esegui la scansione
+        env:
+          DATA_DIR: data
+          MAX_RUNTIME_MINUTES: '320'     # si ferma da solo prima del timeout del job
+          LUNGHEZZA_MINIMA: '10'         # <-- imposta qui il valore che vuoi, niente input interattivo
+          # CRAWL_ID_FORZATO: 'CC-MAIN-2020-05'  # <-- scommenta solo per forzare un crawl specifico
+        run: python -u prova.py
+
+      - name: Mostra lo stato del giorno nei log
+        run: cat data/stato_oggi.txt
+
+      - name: Salva i risultati nel repo privato
+        run: |
+          cd data
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -A
+          git commit -m "Aggiornamento automatico $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "Nessuna modifica da salvare"
+          git push
+
+      - name: Tieni vivo il repo pubblico (evita disattivazione cron dopo 60gg di inattività)
+        if: always()
+        run: |
+          echo "Ultima esecuzione: $(date -u +'%Y-%m-%d %H:%M UTC')" > last_run.log
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add last_run.log
+          git commit -m "Keep-alive $(date -u +'%Y-%m-%d')" || echo "Nessuna modifica da salvare"
+          git push

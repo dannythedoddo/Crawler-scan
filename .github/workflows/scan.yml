@@ -2,8 +2,12 @@ name: Scansione Common Crawl
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # ogni giorno alle 02:00 UTC — modifica pure l'orario
-  workflow_dispatch: {}    # permette anche l'avvio manuale dalla tab "Actions"
+    - cron: '0 */6 * * *'   # ogni 6 ore (00:00, 06:00, 12:00, 18:00 UTC)
+  workflow_dispatch: {}      # permette anche l'avvio manuale dalla tab "Actions"
+
+concurrency:
+  group: scansione-common-crawl
+  cancel-in-progress: false   # se la precedente è ancora in corso, la nuova aspetta in coda invece di girare in parallelo
 
 jobs:
   scan:

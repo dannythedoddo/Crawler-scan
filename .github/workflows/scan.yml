@@ -22,8 +22,8 @@ jobs:
       - name: Checkout dati privati
         uses: actions/checkout@v4
         with:
-          repository: TUO-USERNAME/cc-scan-data
-          token: ${{ secrets.DATA_REPO_TOKEN }}
+          repository: dannythedoddo/Crawler-scan-data
+          token: ${{ secrets.DATA_TOKEN }}
           path: data
 
       - name: Setup Python

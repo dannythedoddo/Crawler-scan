@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 350
     permissions:
       contents: write
+
     steps:
       - name: Checkout codice pubblico (questo repo)
         uses: actions/checkout@v4
@@ -51,9 +52,24 @@ jobs:
           git config user.name "GitHub Actions"
           git add -A
           git commit -m "Aggiornamento automatico $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "Nessuna modifica da salvare"
-          git push
 
-      - name: Tieni vivo il repo pubblico
+          tentativo_riuscito=0
+          for i in 1 2 3 4 5; do
+            if git push; then
+              tentativo_riuscito=1
+              break
+            fi
+            echo "Push rifiutato (tentativo $i/5): qualcun altro ha scritto nel frattempo. Sincronizzo e riprovo tra 10s..."
+            sleep 10
+            git pull --rebase origin main
+          done
+
+          if [ "$tentativo_riuscito" -ne 1 ]; then
+            echo "::error::Impossibile salvare i risultati dopo 5 tentativi. Controllare manualmente."
+            exit 1
+          fi
+
+      - name: Tieni vivo il repo pubblico (evita disattivazione cron dopo 60gg di inattività)
         if: always()
         run: |
           echo "Ultima esecuzione: $(date -u +'%Y-%m-%d %H:%M UTC')" > last_run.log
@@ -61,4 +77,12 @@ jobs:
           git config user.name "GitHub Actions"
           git add last_run.log
           git commit -m "Keep-alive $(date -u +'%Y-%m-%d')" || echo "Nessuna modifica da salvare"
-          git push
+
+          for i in 1 2 3 4 5; do
+            if git push; then
+              break
+            fi
+            echo "Push rifiutato (tentativo $i/5): sincronizzo e riprovo tra 10s..."
+            sleep 10
+            git pull --rebase origin main
+          done

@@ -1,50 +1,50 @@
 name: Scansione Common Crawl
-
+ 
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch: {}
-
+ 
 concurrency:
   group: scansione-common-crawl
   cancel-in-progress: false
-
+ 
 jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     permissions:
       contents: write
-
+ 
     steps:
       - name: Checkout codice pubblico (questo repo)
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v7
+ 
       - name: Checkout dati privati
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: dannythedoddo/Crawler-scan-data
           token: ${{ secrets.DATA_TOKEN }}
           path: data
-
+ 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-
+ 
       - name: Installa dipendenze
         run: pip install -r requirements.txt
-
+ 
       - name: Esegui la scansione
         env:
           DATA_DIR: data
-          MAX_RUNTIME_MINUTES: '320'
+          MAX_RUNTIME_MINUTES: '290'
           LUNGHEZZA_MINIMA: '10'
         run: python -u prova.py
-
+ 
       - name: Mostra lo stato del giorno nei log
         run: cat data/stato_oggi.txt
-
+ 
       - name: Salva i risultati nel repo privato
         run: |
           cd data
@@ -52,7 +52,7 @@ jobs:
           git config user.name "GitHub Actions"
           git add -A
           git commit -m "Aggiornamento automatico $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "Nessuna modifica da salvare"
-
+ 
           tentativo_riuscito=0
           for i in 1 2 3 4 5; do
             if git push; then
@@ -63,26 +63,38 @@ jobs:
             sleep 10
             git pull --rebase origin main
           done
-
+ 
           if [ "$tentativo_riuscito" -ne 1 ]; then
             echo "::error::Impossibile salvare i risultati dopo 5 tentativi. Controllare manualmente."
             exit 1
           fi
-
+ 
       - name: Tieni vivo il repo pubblico (evita disattivazione cron dopo 60gg di inattività)
         if: always()
         run: |
-          echo "Ultima esecuzione: $(date -u +'%Y-%m-%d %H:%M UTC')" > last_run.log
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git add last_run.log
-          git commit -m "Keep-alive $(date -u +'%Y-%m-%d')" || echo "Nessuna modifica da salvare"
-
+ 
+          tentativo_riuscito=0
           for i in 1 2 3 4 5; do
+            # riparto sempre dall'ultima versione remota: questo file non ha
+            # contenuto da conservare, quindi niente merge/rebase, solo sovrascrittura
+            git fetch origin main
+            git reset --hard origin/main
+ 
+            echo "Ultima esecuzione: $(date -u +'%Y-%m-%d %H:%M UTC')" > last_run.log
+            git add last_run.log
+            git commit -m "Keep-alive $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "Nessuna modifica da salvare"
+ 
             if git push; then
+              tentativo_riuscito=1
               break
             fi
-            echo "Push rifiutato (tentativo $i/5): sincronizzo e riprovo tra 10s..."
+            echo "Push rifiutato (tentativo $i/5): riprovo tra 10s ripartendo dall'ultima versione remota..."
             sleep 10
-            git pull --rebase origin main
           done
+ 
+          if [ "$tentativo_riuscito" -ne 1 ]; then
+            echo "::warning::Keep-alive non riuscito dopo 5 tentativi (non blocca la scansione, solo il log di attività)."
+          fi
+ 

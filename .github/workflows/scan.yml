@@ -39,7 +39,7 @@ jobs:
         env:
           DATA_DIR: data
           MAX_RUNTIME_MINUTES: '290'
-          LUNGHEZZA_MINIMA: '10'
+          LUNGHEZZA_MINIMA: '12'
         run: python -u prova.py
  
       - name: Mostra lo stato del giorno nei log
